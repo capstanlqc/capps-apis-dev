@@ -15,8 +15,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from code.serializer import convert_doc, convert_doc_list
 
 client = AsyncIOMotorClient(mongo_uri)
-database = client.get_database("testdb")
-collection = database.get_collection("testcol")
+database = client.get_database("cappisdb")
+collection = database.get_collection("mt_usage")
 
 router = APIRouter()
 call_table = {}
