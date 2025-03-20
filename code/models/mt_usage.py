@@ -18,16 +18,9 @@ class Call(CallIn):
     oid: str
 
 
-class AccumulatedUsageRequest(BaseModel):
-    start_date: str  # Format: YYYY-MM-DD
-    end_date: str  # Format: YYYY-MM-DD
-    application: Optional[str] = None
-    analytic_account: Optional[str] = None
-    mt_provider: Optional[str] = None
-
-
 class AccumulatedUsageResponse(BaseModel):
     total_chars: int
     application: Optional[str] = None
+    date: Optional[str] = None
     analytic_account: Optional[str] = None
     mt_provider: Optional[str] = None

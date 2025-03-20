@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException
 from code.models.mt_usage import (
     Call,
     CallIn,
-    AccumulatedUsageRequest,
     AccumulatedUsageResponse
 )
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -48,27 +47,25 @@ async def read_call_records():
     return convert_doc_list(calls)
 
 
-@router.post("/stats", response_model=list[AccumulatedUsageResponse])
-async def get_aggregated_data(request: AccumulatedUsageRequest, group_by: str = "mt_provider"):
+@router.get("/stats", response_model=list[AccumulatedUsageResponse])
+async def get_aggregated_data(start_date: str = '', end_date: str = '', mt_provider: str = '',
+                              analytic_account: str = '', application: str = '', group_by: str = "mt_provider"):
     """
     Reads accumulated statistics based on the given parameters.
-    Test with:
-    {
-      "start_date": "2025-01-01",
-      "end_date": "2026-01-01",
-      "application": null,
-      "mt_provider": null
-    }
-    :param request: AccumulatedUsageRequest
-    :param group_by: Field to use for grouping. Defaults to mt_provider
+    :param str mt_provider: Filter for the MT provider
+    :param str analytic_account: Filter for analytic account (project)
+    :param str application: Filter for application
+    :param str end_date: End date for the queried period in the YYYY-MM-DD format
+    :param str start_date: Start date for the queried period in the YYYY-MM-DD format
+    :param group_by: Field to use for grouping. Possible values are "date", "mt_provider" (the default), "analytic_account" and "application"
     :return: List of statistics lines
     """
 
     matches = dict()
     today = datetime.today()
     try:
-        start_date = datetime.strptime(request.start_date, "%Y-%m-%d") if request.start_date else today.replace(day=1)
-        end_date = datetime.strptime(request.end_date, "%Y-%m-%d") if request.end_date else today
+        start_date = datetime.strptime(start_date, "%Y-%m-%d") if start_date else today.replace(day=1)
+        end_date = datetime.strptime(end_date, "%Y-%m-%d") if end_date else today
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
@@ -77,24 +74,49 @@ async def get_aggregated_data(request: AccumulatedUsageRequest, group_by: str = 
 
     matches["created_at"] = {"$gte": start_date, "$lte": end_date}
 
-    if request.application and request.application != "all":
-        matches["application"] = request.application
+    # TODO: Make the filters work in a case-insensitive manner
 
-    if request.analytic_account and request.analytic_account != "all":
-        matches["analytic_account"] = request.analytic_account
+    if application and application != "all":
+        matches["application"] = application
 
-    if request.mt_provider and request.mt_provider != "all":
-        matches["mt_provider"] = request.mt_provider
+    if analytic_account and analytic_account != "all":
+        matches["analytic_account"] = analytic_account
 
-    grouping = {
-        "_id": {"$toLower": "$" + group_by}, "total_chars": {"$sum": "$char_count"}
-    }
-    cursor = collection.aggregate([
+    if mt_provider and mt_provider != "all":
+        matches["mt_provider"] = mt_provider
+
+    if group_by != 'date':
+        projections = {
+            group_by: {"$toLower": "$" + group_by},
+            "char_count": "$char_count"
+        }
+        grouping = {
+            "_id": "$" + group_by,
+            "total_chars": {"$sum": "$char_count"}
+        }
+        sort_field = {group_by: 1}
+    else:
+        projections = {
+            "date": {'$dateToString': {"format": '%Y-%m-%d', "date": '$created_at'}},
+            "char_count": "$char_count"
+        }
+        grouping = {
+            "_id": "$date",
+            "total_chars": {"$sum": "$char_count"}
+        }
+        sort_field = {"date": 1}
+
+    pipeline = [
         {"$match": matches},
+        {"$project": projections},
         {"$group": grouping},
-        {"$project": {group_by: "$_id", "total_chars": 1, "_id": 0}}
-    ])
+        {"$project": {group_by: "$_id", "total_chars": 1, "_id": 0}},
+        {"$sort": sort_field}
+    ]
+
+    cursor = collection.aggregate(pipeline)
     results = list(await cursor.to_list())
+
     return results
 
 # @router.post("/calls", response_model=Call, status_code=201)
