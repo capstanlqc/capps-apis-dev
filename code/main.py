@@ -20,7 +20,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://capps.capstan.be"],  # Change this to specific domains in production
+    allow_origins=["https://capps.capstan.be", "https://test.dev.nexver.hu"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
