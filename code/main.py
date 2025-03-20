@@ -1,8 +1,6 @@
 from fastapi import FastAPI
-
-# from code.routers.post import router as post_router
+from fastapi.middleware.cors import CORSMiddleware
 from code.routers.mt_usage import router as mt_usage_router
-from code.serializer import convert_doc, convert_doc_list
 
 
 app = FastAPI(
@@ -18,6 +16,14 @@ app = FastAPI(
         "name": "MIT License",
         "url": "https://opensource.org/licenses/MIT",
     },
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://capps.capstan.be"],  # Change this to specific domains in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
 )
 
 # app.include_router(post_router, prefix="/api/posts")
