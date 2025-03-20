@@ -87,7 +87,7 @@ async def get_aggregated_data(request: AccumulatedUsageRequest, group_by: str = 
         matches["mt_provider"] = request.mt_provider
 
     grouping = {
-        "_id": "$" + group_by, "total_chars": {"$sum": "$char_count"}
+        "_id": {"$toLower": "$" + group_by}, "total_chars": {"$sum": "$char_count"}
     }
     cursor = collection.aggregate([
         {"$match": matches},
