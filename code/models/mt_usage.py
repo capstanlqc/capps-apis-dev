@@ -24,3 +24,9 @@ class AccumulatedUsageResponse(BaseModel):
     date: Optional[str] = None
     analytic_account: Optional[str] = None
     mt_provider: Optional[str] = None
+
+
+class StatOptionsResponse(BaseModel):
+    analytic_account: list[str]
+    application: list[str]
+    mt_provider: list[str]

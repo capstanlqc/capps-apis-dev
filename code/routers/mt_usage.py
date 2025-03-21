@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from code.models.mt_usage import (
     Call,
     CallIn,
-    AccumulatedUsageResponse
+    AccumulatedUsageResponse, StatOptionsResponse
 )
 from motor.motor_asyncio import AsyncIOMotorClient
 from code.serializer import convert_doc, convert_doc_list
@@ -47,19 +47,33 @@ async def read_call_records():
     return convert_doc_list(calls)
 
 
-@router.get("/stats", response_model=list[AccumulatedUsageResponse])
-async def get_aggregated_data(start_date: str = '', end_date: str = '', mt_provider: str = '',
-                              analytic_account: str = '', application: str = '', group_by: str = "mt_provider"):
+@router.get("/stat_options", response_model=StatOptionsResponse)
+async def get_stat_options(start_date: str = '', end_date: str = ''):
+    # Get filters, but only the date ones, we don't need the others
+    filters = get_filters(start_date, end_date)
+    # Get unique (distinct) values
+    result = {}
+    for field in ['analytic_account', 'application', 'mt_provider']:
+        unique_values = await collection.distinct(field, filters[0])
+        result[field] = sorted(list(set([x.lower() for x in unique_values])))
+    return result
+
+
+def get_filters(start_date: str = '', end_date: str = '', **kwargs) -> list[dict]:
     """
-    Reads accumulated statistics based on the given parameters.
-    :param str mt_provider: Filter for the MT provider
-    :param str analytic_account: Filter for analytic account (project)
-    :param str application: Filter for application
-    :param str end_date: End date for the queried period in the YYYY-MM-DD format
-    :param str start_date: Start date for the queried period in the YYYY-MM-DD format
-    :param group_by: Field to use for grouping. Possible values are "date", "mt_provider" (the default), "analytic_account" and "application"
-    :return: List of statistics lines
+    Helper function to conduct the matches stage of a pipeline
     """
+
+    def filter_helper(field_name: str, field_value: str) -> dict:
+        """
+        Helper function to make a case-insensitive search in MongoDB
+        """
+        return {"$expr": {
+            "$eq": [
+                {"$toLower": "$" + field_name},
+                field_value.lower()
+            ]
+        }}
 
     matches = []
     today = datetime.today()
@@ -74,29 +88,28 @@ async def get_aggregated_data(start_date: str = '', end_date: str = '', mt_provi
 
     matches.append({"created_at": {"$gte": start_date, "$lte": end_date}})
 
-    if application and application != "all":
-        matches.append({"$expr": {
-            "$eq": [
-                {"$toLower": "$application"},
-                application.lower()
-            ]
-        }})
+    for name, value in kwargs.items():
+        if value and value.lower() != "all":
+            matches.append(filter_helper(name, value))
 
-    if analytic_account and analytic_account != "all":
-        matches.append({"$expr": {
-            "$eq": [
-                {"$toLower": "$analytic_account"},
-                analytic_account.lower()
-            ]
-        }})
+    return matches
 
-    if mt_provider and mt_provider != "all":
-        matches.append({"$expr": {
-            "$eq": [
-                {"$toLower": "$mt_provider"},
-                mt_provider.lower()
-            ]
-        }})
+
+@router.get("/stats", response_model=list[AccumulatedUsageResponse])
+async def get_aggregated_data(start_date: str = '', end_date: str = '', mt_provider: str = '',
+                              analytic_account: str = '', application: str = '', group_by: str = "mt_provider"):
+    """
+    Reads accumulated statistics based on the given parameters.
+    :param str mt_provider: Filter for the MT provider
+    :param str analytic_account: Filter for analytic account (project)
+    :param str application: Filter for application
+    :param str end_date: End date for the queried period in the YYYY-MM-DD format
+    :param str start_date: Start date for the queried period in the YYYY-MM-DD format
+    :param group_by: Field to use for grouping. Possible values are "date", "mt_provider" (the default), "analytic_account" and "application"
+    :return: List of statistics lines
+    """
+
+    matches = get_filters(start_date, end_date, mt_provider=mt_provider, analytic_account=analytic_account, application=application)
 
     if group_by != 'date':
         projections = {
