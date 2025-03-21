@@ -61,7 +61,7 @@ async def get_aggregated_data(start_date: str = '', end_date: str = '', mt_provi
     :return: List of statistics lines
     """
 
-    matches = dict()
+    matches = []
     today = datetime.today()
     try:
         start_date = datetime.strptime(start_date, "%Y-%m-%d") if start_date else today.replace(day=1)
@@ -72,31 +72,31 @@ async def get_aggregated_data(start_date: str = '', end_date: str = '', mt_provi
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="Start date cannot be after end date")
 
-    matches["created_at"] = {"$gte": start_date, "$lte": end_date}
+    matches.append({"created_at": {"$gte": start_date, "$lte": end_date}})
 
     if application and application != "all":
-        matches["$expr"] = {
+        matches.append({"$expr": {
             "$eq": [
                 {"$toLower": "$application"},
                 application.lower()
             ]
-        }
+        }})
 
     if analytic_account and analytic_account != "all":
-        matches["$expr"] = {
+        matches.append({"$expr": {
             "$eq": [
                 {"$toLower": "$analytic_account"},
                 analytic_account.lower()
             ]
-        }
+        }})
 
     if mt_provider and mt_provider != "all":
-        matches["$expr"] = {
+        matches.append({"$expr": {
             "$eq": [
                 {"$toLower": "$mt_provider"},
                 mt_provider.lower()
             ]
-        }
+        }})
 
     if group_by != 'date':
         projections = {
@@ -120,7 +120,7 @@ async def get_aggregated_data(start_date: str = '', end_date: str = '', mt_provi
         sort_field = {"date": 1}
 
     pipeline = [
-        {"$match": matches},
+        {"$match": {"$and": matches}},
         {"$project": projections},
         {"$group": grouping},
         {"$project": {group_by: "$_id", "total_chars": 1, "_id": 0}},
