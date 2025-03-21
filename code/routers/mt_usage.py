@@ -74,16 +74,29 @@ async def get_aggregated_data(start_date: str = '', end_date: str = '', mt_provi
 
     matches["created_at"] = {"$gte": start_date, "$lte": end_date}
 
-    # TODO: Make the filters work in a case-insensitive manner
-
     if application and application != "all":
-        matches["application"] = application
+        matches["$expr"] = {
+            "$eq": [
+                {"$toLower": "$application"},
+                application.lower()
+            ]
+        }
 
     if analytic_account and analytic_account != "all":
-        matches["analytic_account"] = analytic_account
+        matches["$expr"] = {
+            "$eq": [
+                {"$toLower": "$analytic_account"},
+                analytic_account.lower()
+            ]
+        }
 
     if mt_provider and mt_provider != "all":
-        matches["mt_provider"] = mt_provider
+        matches["$expr"] = {
+            "$eq": [
+                {"$toLower": "$mt_provider"},
+                mt_provider.lower()
+            ]
+        }
 
     if group_by != 'date':
         projections = {
