@@ -4,7 +4,7 @@ from code.routers.mt_usage import router as mt_usage_router
 
 
 app = FastAPI(
-    title="cApps API",              # Custom title
+    title="cApps - MT usage API",              # Custom title
     description="This is cApps API documentation.",  # Custom description
     version="1.0.0",                   # API version
     contact={
@@ -26,6 +26,10 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# app.include_router(post_router, prefix="/api/posts")
-app.include_router(mt_usage_router, prefix="/api/mt/usage")
+version = "v1"
+@app.get(f"/{version}/status")
+async def give_status():
+    return {"message": "The app is awake!"}
+
+app.include_router(mt_usage_router, prefix=f"/{version}/mt/usage")
 
