@@ -45,9 +45,20 @@ async def create_call_record(
     return {"message": "Record created", "oid": str(obj_id), "call": call}
 
 
+
 @router.get("/calls", response_model=list[Call])
-async def read_call_records():
-    calls = await collection.find().sort({'created_at': -1}).to_list(length=10)
+async def read_call_records(
+        reverse: Optional[bool] = None,
+        authorization: str = Header(None) # extracts authorization header
+):
+    if not authorization or authorization != f"Bearer {AUTH_KEY}":
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    if reverse:
+        # field "_id" has the same time data as "created_at" (which might not exist)
+        calls = await collection.find().sort({"_id": -1}).to_list(length=10)
+    else:
+        calls = await collection.find().to_list(length=10)
     return convert_doc_list(calls)
 
 
