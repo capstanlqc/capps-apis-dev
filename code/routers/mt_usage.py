@@ -1,8 +1,9 @@
 import os
+from dotenv import load_dotenv
+from typing import Optional
 from datetime import datetime
 
-from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, status, HTTPException
 from code.models.mt_usage import (
     Call,
     CallIn,
@@ -13,6 +14,8 @@ from code.serializer import convert_doc, convert_doc_list
 
 load_dotenv()
 mongo_uri = os.getenv("MONGO_URI")
+AUTH_KEY = os.getenv("DEV_AUTH_KEY")
+
 
 client = AsyncIOMotorClient(mongo_uri)
 database = client.get_database("cappisdb")
@@ -26,19 +29,20 @@ def find_call(call_id: int):
     return call_table.get(call_id)
 
 
-@router.get("/")
-async def root():
-    collections = await client.list_database_names()
-    return {
-        "message": "Connected bla",
-        "collections": collections,
-    }
-
-
 @router.post("/calls")
-async def create_call_record(call: CallIn):
-    await collection.insert_one(call.model_dump())
-    return {"message": "Record created", "call": call}
+async def create_call_record(
+        call: CallIn,
+        authorization: str = Header(None) # extracts authorization header
+):
+    if not authorization or authorization != f"Bearer {AUTH_KEY}":
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    # await collection.insert_one(call.model_dump())
+    new_doc = await collection.insert_one(call.model_dump())
+    obj_id = new_doc.inserted_id
+    # doc = await collection.find_one({"_id": obj_id})
+    # todo? return `"call": convert_doc(doc)` instead of `"oid": str(obj_id), "call": call` ?
+    return {"message": "Record created", "oid": str(obj_id), "call": call}
 
 
 @router.get("/calls", response_model=list[Call])
