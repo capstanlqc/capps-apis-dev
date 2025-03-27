@@ -62,6 +62,23 @@ async def read_call_records(
     return convert_doc_list(calls)
 
 
+@router.get("/calls/range", response_model=list[Call])
+async def read_call_records_range(
+        offset: Optional[int] = None,
+        limit: Optional[int] = None,
+        reverse: Optional[bool] = None,
+        authorization: str = Header(None) # extracts authorization header
+):
+    if not authorization or authorization != f"Bearer {AUTH_KEY}":
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    if reverse:
+        calls = await collection.find().sort("_id", -1).skip(offset).to_list(length=limit)
+    else:
+        calls = await collection.find().skip(offset).to_list(length=limit)
+    return convert_doc_list(calls)
+
+
 @router.get("/stat_options", response_model=StatOptionsResponse)
 async def get_stat_options(start_date: str = '', end_date: str = ''):
     # Get filters, but only the date ones, we don't need the others
