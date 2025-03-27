@@ -12,6 +12,15 @@ class CallIn(BaseModel):
     mt_provider: str
     analytic_account: Optional[str] = None
     created_at: Optional[datetime] = datetime.today()
+    # user: str
+
+# Python’s datetime object is automatically converted to the correct BSON Date format when saved to MongoDB.
+# In other words, MongoDB will store datetime.today() as a BSON Date type, which is internally represented
+# as a 64-bit integer (milliseconds since the Unix epoch), which MongoDB will identify as a timestamp
+# (a BSON Date type), e.g. ISODate("2025-03-27T12:00:00Z")
+
+# However, not that the datetime object will be stored with the time zone set to UTC
+# unless you explicitly specify the time zone in the datetime object.
 
 
 class Call(CallIn):
