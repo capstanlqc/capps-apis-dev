@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from code.routers.mt_usage import router as mt_usage_router
 
@@ -27,9 +27,10 @@ app.add_middleware(
 )
 
 version = "v1"
-@app.get(f"/{version}/status")
-async def give_status():
-    return {"message": "The app is awake!"}
+@app.get(f"/{version}/healthcheck", status_code=204)
+async def health() -> Response:
+    return Response(status_code=204)
+
 
 app.include_router(mt_usage_router, prefix=f"/{version}/mt/usage")
 
