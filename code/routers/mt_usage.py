@@ -1,18 +1,21 @@
 import os
 from dotenv import load_dotenv
+from typing import Optional
+from datetime import datetime
+
+from fastapi import APIRouter, Header, status, HTTPException
+from code.models.mt_usage import (
+    Call,
+    CallIn,
+    AccumulatedUsageResponse, StatOptionsResponse
+)
+from motor.motor_asyncio import AsyncIOMotorClient
+from code.serializer import convert_doc, convert_doc_list
 
 load_dotenv()
 mongo_uri = os.getenv("MONGO_URI")
+AUTH_KEY = os.getenv("DEV_AUTH_KEY")
 
-from fastapi import APIRouter, HTTPException
-
-from code.models.mt_usage import (
-    Call,
-    CallIn
-)
-
-from motor.motor_asyncio import AsyncIOMotorClient
-from code.serializer import convert_doc, convert_doc_list
 
 client = AsyncIOMotorClient(mongo_uri)
 database = client.get_database("cappisdb")
@@ -26,25 +29,153 @@ def find_call(call_id: int):
     return call_table.get(call_id)
 
 
-@router.get("/")
-async def root():
-    collections = await client.list_database_names()
-    return {
-        "message": "Connected bla",
-        "collections": collections,
-    }
-
 @router.post("/calls")
-async def create_call_record(call: CallIn):
-    await collection.insert_one(call.model_dump())
-    return {"message": "Record created", "call": call}
+async def create_call_record(
+        call: CallIn,
+        authorization: str = Header(None) # extracts authorization header
+):
+    if not authorization or authorization != f"Bearer {AUTH_KEY}":
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    # await collection.insert_one(call.model_dump())
+    new_doc = await collection.insert_one(call.model_dump())
+    obj_id = new_doc.inserted_id
+    # doc = await collection.find_one({"_id": obj_id})
+    # todo? return `"call": convert_doc(doc)` instead of `"oid": str(obj_id), "call": call` ?
+    return {"message": "Record created", "oid": str(obj_id), "call": call}
+
 
 
 @router.get("/calls", response_model=list[Call])
-async def read_call_records():
-    calls = await collection.find().to_list(length=10)
+async def read_call_records(
+        reverse: Optional[bool] = None,
+        authorization: str = Header(None) # extracts authorization header
+):
+    if not authorization or authorization != f"Bearer {AUTH_KEY}":
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    if reverse:
+        # field "_id" has the same time data as "created_at" (which might not exist)
+        calls = await collection.find().sort({"_id": -1}).to_list(length=10)
+    else:
+        calls = await collection.find().to_list(length=10)
     return convert_doc_list(calls)
 
+
+@router.get("/calls/range", response_model=list[Call])
+async def read_call_records_range(
+        offset: Optional[int] = None,
+        limit: Optional[int] = None,
+        reverse: Optional[bool] = None,
+        authorization: str = Header(None) # extracts authorization header
+):
+    if not authorization or authorization != f"Bearer {AUTH_KEY}":
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    if reverse:
+        calls = await collection.find().sort("_id", -1).skip(offset).to_list(length=limit)
+    else:
+        calls = await collection.find().skip(offset).to_list(length=limit)
+    return convert_doc_list(calls)
+
+
+@router.get("/stat_options", response_model=StatOptionsResponse)
+async def get_stat_options(start_date: str = '', end_date: str = ''):
+    # Get filters, but only the date ones, we don't need the others
+    filters = get_filters(start_date, end_date)
+    # Get unique (distinct) values
+    result = {}
+    for field in ['analytic_account', 'application', 'mt_provider']:
+        unique_values = await collection.distinct(field, filters[0])
+        result[field] = sorted(list(set([x.lower() for x in unique_values])))
+    return result
+
+
+def get_filters(start_date: str = '', end_date: str = '', **kwargs) -> list[dict]:
+    """
+    Helper function to conduct the matches stage of a pipeline
+    """
+
+    def filter_helper(field_name: str, field_value: str) -> dict:
+        """
+        Helper function to make a case-insensitive search in MongoDB
+        """
+        return {"$expr": {
+            "$eq": [
+                {"$toLower": "$" + field_name},
+                field_value.lower()
+            ]
+        }}
+
+    matches = []
+    today = datetime.today()
+    try:
+        start_date = datetime.strptime(start_date, "%Y-%m-%d") if start_date else today.replace(day=1)
+        end_date = datetime.strptime(end_date, "%Y-%m-%d") if end_date else today
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="Start date cannot be after end date")
+
+    matches.append({"created_at": {"$gte": start_date, "$lte": end_date}})
+
+    for name, value in kwargs.items():
+        if value and value.lower() != "all":
+            matches.append(filter_helper(name, value))
+
+    return matches
+
+
+@router.get("/stats", response_model=list[AccumulatedUsageResponse])
+async def get_aggregated_data(start_date: str = '', end_date: str = '', mt_provider: str = '',
+                              analytic_account: str = '', application: str = '', group_by: str = "mt_provider"):
+    """
+    Reads accumulated statistics based on the given parameters.
+    :param str mt_provider: Filter for the MT provider
+    :param str analytic_account: Filter for analytic account (project)
+    :param str application: Filter for application
+    :param str end_date: End date for the queried period in the YYYY-MM-DD format
+    :param str start_date: Start date for the queried period in the YYYY-MM-DD format
+    :param group_by: Field to use for grouping. Possible values are "date", "mt_provider" (the default), "analytic_account" and "application"
+    :return: List of statistics lines
+    """
+
+    matches = get_filters(start_date, end_date, mt_provider=mt_provider, analytic_account=analytic_account, application=application)
+
+    if group_by != 'date':
+        projections = {
+            group_by: {"$toLower": "$" + group_by},
+            "char_count": "$char_count"
+        }
+        grouping = {
+            "_id": "$" + group_by,
+            "total_chars": {"$sum": "$char_count"}
+        }
+        sort_field = {group_by: 1}
+    else:
+        projections = {
+            "date": {'$dateToString': {"format": '%Y-%m-%d', "date": '$created_at'}},
+            "char_count": "$char_count"
+        }
+        grouping = {
+            "_id": "$date",
+            "total_chars": {"$sum": "$char_count"}
+        }
+        sort_field = {"date": 1}
+
+    pipeline = [
+        {"$match": {"$and": matches}},
+        {"$project": projections},
+        {"$group": grouping},
+        {"$project": {group_by: "$_id", "total_chars": 1, "_id": 0}},
+        {"$sort": sort_field}
+    ]
+
+    cursor = collection.aggregate(pipeline)
+    results = list(await cursor.to_list())
+
+    return results
 
 # @router.post("/calls", response_model=Call, status_code=201)
 # async def create_call_record(call: CallIn):
