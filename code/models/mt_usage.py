@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel
+from typing import Optional, Literal
+from pydantic import BaseModel, Field
 
 
 class CallIn(BaseModel):
@@ -11,7 +11,7 @@ class CallIn(BaseModel):
     target_lang: str
     mt_provider: str
     analytic_account: Optional[str] = None
-    created_at: Optional[datetime] = datetime.today()
+    created_at: Optional[datetime] = Field(default_factory=datetime.today)
     # user: str
 
 # Python’s datetime object is automatically converted to the correct BSON Date format when saved to MongoDB.
