@@ -2,13 +2,16 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from code.routers.mt_usage import router as mt_usage_router
 
-
+version = "v1"
 app = FastAPI(
-    title="cApps - MT usage API",              # Custom title
-    description="This is cApps API documentation.",  # Custom description
-    version="1.0.0",                   # API version
+    title="cApps ~ Toledo [track]",
+    description="MT usage tracker API documentation.",
+    version="1.0.0",
+    openapi_url=f"/{version}/openapi.json",
+    docs_url=f"/{version}/docs",
+    redoc_url=f"/{version}/redoc",
     contact={
-        "name": "Manuel Souto Pico",
+        "name": "cApStAn",
         "url": "https://www.capstan.be",
         "email": "manuel.souto@capstan.be",
     },
@@ -26,11 +29,10 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-version = "v1"
+
 @app.get(f"/{version}/healthcheck", status_code=204)
 async def health() -> Response:
     return Response(status_code=204)
 
 
 app.include_router(mt_usage_router, prefix=f"/{version}/mt/usage")
-
