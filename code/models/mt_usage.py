@@ -9,8 +9,10 @@ class CallIn(BaseModel):
     char_count: int
     source_lang: str
     target_lang: str
+    # task: Literal["MT", "QE"]
     mt_provider: str
     analytic_account: Optional[str] = None
+    job_id: Optional[str] = None
     created_at: Optional[datetime] = Field(default_factory=datetime.today)
     # user: str
 
