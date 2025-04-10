@@ -14,11 +14,11 @@ from code.serializer import convert_doc, convert_doc_list
 
 load_dotenv()
 mongo_uri = os.getenv("MONGO_URI")
-AUTH_KEY = os.getenv("DEV_AUTH_KEY")
-
+AUTH_KEY = os.getenv("AUTH_KEY")
+DB_NAME = os.getenv("DB_NAME")
 
 client = AsyncIOMotorClient(mongo_uri)
-database = client.get_database("cappisdb")
+database = client.get_database(DB_NAME)
 collection = database.get_collection("mt_usage")
 
 router = APIRouter()
