@@ -43,29 +43,12 @@ async def create_call_record(
     return {"message": "Record created", "oid": str(obj_id), "call": call}
 
 
-
-@router.get("/calls", response_model=list[Call])
+@router.get("/calls", response_model=List[Call])
 async def read_call_records(
-        reverse: Optional[bool] = None,
-        authorization: str = Header(None) # extracts authorization header
-):
-    if not authorization or authorization != f"Bearer {AUTH_KEY}":
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
-
-    if reverse:
-        # field "_id" has the same time data as "created_at" (which might not exist)
-        calls = await collection.find().sort({"_id": -1}).to_list(length=10)
-    else:
-        calls = await collection.find().to_list(length=10)
-    return convert_doc_list(calls)
-
-
-@router.get("/calls/range", response_model=list[Call])
-async def read_call_records_range(
-        offset: Optional[int] = None,
+        offset: Optional[int] = 0,
         limit: Optional[int] = None,
         reverse: Optional[bool] = None,
-        authorization: str = Header(None) # extracts authorization header
+        authorization: str = Header(None)  # extracts authorization header
 ):
     if not authorization or authorization != f"Bearer {AUTH_KEY}":
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
@@ -130,12 +113,12 @@ async def get_stat_options(start_date: str = '', end_date: str = ''):
     return result
 
 
-def get_filters(start_date: str = '', end_date: str = '', **kwargs) -> list[dict]:
+def get_filters(start_date: str = '', end_date: str = '', **kwargs) -> List[Dict]:
     """
     Helper function to conduct the matches stage of a pipeline
     """
 
-    def filter_helper(field_name: str, field_value: str) -> dict:
+    def filter_helper(field_name: str, field_value: str) -> Dict:
         """
         Helper function to make a case-insensitive search in MongoDB
         """
