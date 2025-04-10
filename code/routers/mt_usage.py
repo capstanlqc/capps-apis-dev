@@ -1,9 +1,12 @@
+from enum import Enum
+import json
 import os
 from dotenv import load_dotenv
-from typing import Optional
+from typing import Optional, List, Dict
 from datetime import datetime
+from bson import ObjectId
 
-from fastapi import APIRouter, Header, status, HTTPException
+from fastapi import APIRouter, Header, status, HTTPException, Depends
 from code.models.mt_usage import (
     Call,
     CallIn,
@@ -22,11 +25,6 @@ database = client.get_database(DB_NAME)
 collection = database.get_collection("mt_usage")
 
 router = APIRouter()
-call_table = {}
-
-
-def find_call(call_id: int):
-    return call_table.get(call_id)
 
 
 @router.post("/calls")
@@ -77,6 +75,47 @@ async def read_call_records_range(
     else:
         calls = await collection.find().skip(offset).to_list(length=limit)
     return convert_doc_list(calls)
+
+
+@router.get("/apps", response_model=List)
+async def get_applications(
+        authorization: str = Header(None)  # extracts authorization header
+):
+    data = await read_call_records(authorization=f"Bearer {AUTH_KEY}")
+    apps = list(set(call["application"] for call in data))
+    return sorted(apps)
+
+
+@router.get("/accounts", response_model=List)
+async def get_analytic_accounts(
+        authorization: str = Header(None)  # extracts authorization header
+):
+    data = await read_call_records(authorization=f"Bearer {AUTH_KEY}")
+    accounts = list(set(call["analytic_account"] for call in data))
+    # AnalyticAccounts = Enum("AnalyticAccounts", accounts)
+    # print(list(AnalyticAccounts))
+    return sorted(accounts)
+
+@router.get("/providers", response_model=List)
+async def get_providers(
+        authorization: str = Header(None)  # extracts authorization header
+):
+    data = await read_call_records(authorization=f"Bearer {AUTH_KEY}")
+    providers = list(set(call["mt_provider"] for call in data))
+    return sorted(set(p.lower() for p in providers))
+
+
+
+@router.get("/calls/{id}", response_model=Call)
+async def find_call_records_by_id(
+        id: str,
+        authorization: str = Header(None) # extracts authorization header
+):
+    if not authorization or authorization != f"Bearer {AUTH_KEY}":
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    call = await collection.find_one({"_id": ObjectId(id)})
+    return convert_doc(call)
 
 
 @router.get("/stat_options", response_model=StatOptionsResponse)
