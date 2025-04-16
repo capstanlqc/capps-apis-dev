@@ -104,11 +104,11 @@ async def find_call_records_by_id(
 @router.get("/stat_options", response_model=StatOptionsResponse)
 async def get_stat_options(start_date: str = '', end_date: str = ''):
     # Get filters, but only the date ones, we don't need the others
-    filters = get_filters(start_date, end_date)
+    # filters = get_filters(start_date, end_date)
     # Get unique (distinct) values
     result = {}
     for field in ['analytic_account', 'application', 'mt_provider']:
-        unique_values = await collection.distinct(field, filters[0])
+        unique_values = await collection.distinct(field) # filters[0])
         result[field] = sorted(list(set([x.lower() for x in unique_values])))
     return result
 
